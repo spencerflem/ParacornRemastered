@@ -88,6 +88,7 @@ public class GameScreen implements Screen {
         UIstage.draw();
 
         /* TODO: DRAW IN SIDES OF VIEWPORT!
+        //use worldrenderer?
 
         float coord300 = viewport.getWorldHeight();
         //System.out.println("coord300: " + Float.toString(coord300));
