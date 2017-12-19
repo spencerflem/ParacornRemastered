@@ -1,0 +1,69 @@
+
+game.png
+size: 1024,512
+format: RGBA8888
+filter: Nearest,Nearest
+repeat: none
+acorn
+  rotate: false
+  xy: 132, 103
+  size: 24, 27
+  orig: 24, 27
+  offset: 0, 0
+  index: -1
+acornfrown
+  rotate: false
+  xy: 720, 463
+  size: 24, 27
+  orig: 24, 27
+  offset: 0, 0
+  index: -1
+cloud
+  rotate: false
+  xy: 2, 234
+  size: 256, 256
+  orig: 256, 256
+  offset: 0, 0
+  index: -1
+ground
+  rotate: false
+  xy: 518, 398
+  size: 200, 92
+  orig: 200, 92
+  offset: 0, 0
+  index: -1
+parachutesheet
+  rotate: false
+  xy: 260, 234
+  size: 256, 256
+  orig: 256, 256
+  offset: 0, 0
+  index: -1
+restartbutton
+  rotate: false
+  xy: 518, 364
+  size: 32, 32
+  orig: 32, 32
+  offset: 0, 0
+  index: -1
+sideground
+  rotate: false
+  xy: 2, 2
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+stick
+  rotate: false
+  xy: 204, 215
+  size: 128, 17
+  orig: 128, 17
+  offset: 0, 0
+  index: -1
+topbranch
+  rotate: false
+  xy: 2, 132
+  size: 200, 100
+  orig: 200, 100
+  offset: 0, 0
+  index: -1
