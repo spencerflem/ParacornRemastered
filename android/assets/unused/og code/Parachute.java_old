@@ -1,0 +1,81 @@
+package com.spentronics.paracorn;
+import com.badlogic.gdx.ApplicationListener;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+
+public class Parachute {
+	
+	private static final int FRAME_COLS = 2;
+	private static final int FRAME_ROWS = 2;
+	private static final float FRAME_SPEED_UP = 0.04f;
+	private static final float FRAME_SPEED_DOWN = 0.02f;
+	
+	Texture chuteSheet;
+	TextureRegion[] chuteFrames;
+	SpriteBatch spriteBatch;
+	
+	public TextureRegion currentFrame;
+	public boolean visible;
+	
+	float stateTime;
+	boolean animate;
+	boolean deployed;
+	
+	public Parachute() {
+		chuteSheet = new Texture(Gdx.files.internal("parachutesheet.png"));
+		TextureRegion[][] tmp = TextureRegion.split(chuteSheet, chuteSheet.getWidth()/FRAME_COLS, chuteSheet.getHeight()/FRAME_ROWS);
+		chuteFrames = new TextureRegion[FRAME_COLS * FRAME_ROWS];
+		int index = 0;
+		for (int i=0; i < FRAME_ROWS; i++) {
+			for (int j=0; j < FRAME_COLS; j++) {
+				chuteFrames[index++] = tmp[i][j];
+			}
+		}
+		spriteBatch = new SpriteBatch();
+		stateTime = 100f;
+		currentFrame = chuteFrames[0];
+		animate = false;
+		visible = false;
+		deployed = false;
+	}
+	
+	public void advanceTime(float delta) {
+		if(animate) {
+			stateTime += delta;
+		}
+		if (deployed) {
+			int framesPassed = Math.min(chuteFrames.length-1, Math.round(stateTime/FRAME_SPEED_UP));
+			currentFrame = chuteFrames[framesPassed];
+		}
+		else {
+			visible = true;
+			int framesPassed = Math.round(stateTime/FRAME_SPEED_DOWN);
+			if (framesPassed <= chuteFrames.length-1) {
+				currentFrame = chuteFrames[chuteFrames.length-1-framesPassed];
+				visible = true;
+			}
+			else {
+				currentFrame = chuteFrames[0];
+				visible=false;
+			}
+		}
+	}
+	
+	public void deploy() {
+		stateTime=0;
+		animate = true;
+		visible = true;
+		deployed = true;
+	}
+	
+	public void undeploy() {
+		animate = true;
+		deployed = false;
+		visible = true;
+		stateTime = 0;
+	}
+}

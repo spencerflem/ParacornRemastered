@@ -1,0 +1,675 @@
+package com.spentronics.paracorn;
+
+import java.util.Iterator;
+import java.util.Random;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Keys;
+import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureWrap;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.math.Circle;
+import com.badlogic.gdx.math.Intersector;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.TimeUtils;
+import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
+
+public class GameScreen implements Screen {
+	final Paracorn game;
+	
+	int stickDistanceApart = 50; //54 //75 //50
+	int stickMoveDistance = 90; //108 //100 //100 //90
+	int stickSpawnDistance = 125; //150 //125 //120 //125
+	int stickSpeed = 100; //100 //75 //100
+	int topSpeed = 240; //200 //250 //240
+	int chuteSpeed = 60; //75 //75 //60
+	
+	//ENSURE:
+	// ((stickSpawnDistance/chuteSpeed)-(stickSpawnDistance/topSpeed)) > (stickMoveDistance-stickDistanceApart+acornWidth)/stickSpeed)
+	//so that it is winnable
+	// 2 > 0.5
+	
+	
+	//TODO: side texture, wobblebranches on hit, sway when parachuting, parachute drawings, menus, highscores, ensure dispose is correct
+	//TODO: isJustTouched bug - plays sound insanely fast
+	//TODO: redo all art, wider branches and ground to fit, get flash to not be horrific (vignette?)
+	//TODO: anti aliasing
+	//TODO: for kickstarter: mute, (play sounds as sound effects?) multiple skins/backgrounds, way to save who got it before said time (so early adopters got no adds) if allowed in tos 
+	//get to change this at that time if its actually going to happen
+	//TODO: better way of restarting game
+	
+	//black box - cut off sticks just extend out of nothingness
+	//set viewport max size?
+	//also: top branch may have to be centered
+	
+	int acceleration = 1000;
+	int acornRestingHeight = 50;
+	int groundRestingHeight = -5;
+	
+	int cloudSpawnDistance = 200;
+	
+	Texture stickTexture;
+	Texture acornTexture;
+	Texture groundTexture;
+	Texture topStickTexture;
+	Texture acornFrownTexture;
+	Texture cloudTexture;
+	Texture restartButtonTexture;
+	Texture sidegroundTexture;
+	Sound parachuteUpSound;
+	Sound parachuteDownSound;
+	Sound hitStickSound;
+	Sound passStickSound;
+	Sound hitGroundSound;
+	Sound buttonSound;
+	Sound twigHitSound;
+	Music backgroundMusicLoop;
+	Music backgroundMusicIntro;
+	OrthographicCamera camera;
+	Viewport viewport;
+	Acorn acorn;
+	Parachute chute;
+	Ground ground;
+	TopStick topStick;
+	Array<Stick> sticks;
+	Array<Cloud> clouds;
+	int distanceSinceStick;
+	int sticksPassed;
+	long timeStarted;
+	boolean chuteDeployed;
+	boolean canControl;
+	boolean spawnSticks;
+	boolean ceaseToUpdateSpeed;
+	boolean groundReleased;
+	boolean endSticks;
+	boolean hasChute;
+	boolean startingDeployHappened;
+	boolean spaceRestartsGame;
+	boolean showRestart;
+	float cameraMoved;
+	float currentWorldHeight;
+	int shakeForce;
+	int lastShakeDirection;
+	int stickHits;
+	Preferences stats;
+	Random random;
+	
+	public GameScreen(final Paracorn gam) {
+		this.game = gam;
+		
+		stickTexture = new Texture(Gdx.files.internal("stick2small.png"));
+		acornTexture = new Texture(Gdx.files.internal("acornDown.png"));
+		topStickTexture = new Texture(Gdx.files.internal("topbranch.png"));
+		groundTexture = new Texture(Gdx.files.internal("ground.png"));
+		groundTexture.setWrap(TextureWrap.Repeat, TextureWrap.Repeat);
+		acornFrownTexture = new Texture(Gdx.files.internal("acornfrown.png"));
+		cloudTexture = new Texture(Gdx.files.internal("cloud2ps.png")); //was cloud.png
+		restartButtonTexture = new Texture(Gdx.files.internal("restart.png"));
+		sidegroundTexture = new Texture(Gdx.files.internal("sidegrounddemosmall.png"));
+		
+		hitStickSound = Gdx.audio.newSound(Gdx.files.internal("hit.wav"));
+		hitGroundSound = Gdx.audio.newSound(Gdx.files.internal("impact.wav"));
+		passStickSound = Gdx.audio.newSound(Gdx.files.internal("pass2.wav"));
+		parachuteUpSound = Gdx.audio.newSound(Gdx.files.internal("dep.wav"));
+		parachuteDownSound = Gdx.audio.newSound(Gdx.files.internal("undep.wav"));
+		twigHitSound = Gdx.audio.newSound(Gdx.files.internal("wood3.wav"));
+		
+		backgroundMusicLoop = Gdx.audio.newMusic(Gdx.files.internal("bestloop.wav"));
+		backgroundMusicLoop.setLooping(true);
+		MusicListener musicListener = new MusicListener(backgroundMusicLoop);
+		backgroundMusicIntro = Gdx.audio.newMusic(Gdx.files.internal("bestloopintro.wav"));
+		backgroundMusicIntro.setOnCompletionListener(musicListener);
+		backgroundMusicIntro.play();
+		
+		camera = new OrthographicCamera();
+		viewport = new ExtendViewport(game.width, game.height, camera);
+		//camera.setToOrtho(false);
+		viewport.update(200, 400);
+		
+		stats = Gdx.app.getPreferences("stats");
+		random = new Random();
+		
+		//acorn = new Acorn();
+		//acorn.sprite = new Sprite(acornTexture);
+		//acorn.sprite.setPosition(game.width/2 - acornTexture.getWidth()/2, game.height-acornTexture.getHeight()-acornRestingHeight);
+		//acorn.sprite.setSize(acornTexture.getWidth(), acornTexture.getHeight());
+		//acorn.boundingCircle = new Circle(acorn.sprite.getX() + 12, acorn.sprite.getY() + 13, 10);
+		
+		//chute = new Parachute();
+		
+		//chuteDeployed = true;
+		//canControl = false;
+		//spawnSticks = true;
+		//ceaseToUpdateSpeed = true;
+		//groundReleased = false;
+		//endSticks = false;
+		//hasChute = false;
+		//startingDeployHappened = false;
+		//spaceRestartsGame = false;
+		//showRestart = false;
+		
+		//shakeForce = 0;
+		//lastShakeDirection = 0;
+		//stickHits = 0;
+		
+		//sticks = new Array<Stick>();
+		
+		//spawnStick();
+		
+		//clouds = new Array<Cloud>();
+		//spawnCloud();
+		
+		ground = new Ground();
+		ground.sprite = new Sprite(groundTexture);
+		//ground.sprite.setPosition((game.width-groundTexture.getWidth())/2, -groundTexture.getHeight());
+		//ground.sprite.setSize(200, 92);
+		
+		topStick = new TopStick();
+		topStick.sprite = new Sprite(topStickTexture);
+		//topStick.sprite.setPosition(0, game.height-topStickTexture.getHeight());
+		//topStick.sprite.setSize(topStickTexture.getWidth(), topStickTexture.getHeight());
+		
+		//sidegroundTexture.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+		
+		//cameraMoved = 0;
+		
+		setupValues();
+	}
+	
+	private void setupValues() {
+
+		camera.setToOrtho(false);
+		viewport.update(200, 400);
+		resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
+		acorn = new Acorn();
+		acorn.sprite = new Sprite(acornTexture);
+		acorn.sprite.setPosition(game.width/2 - acornTexture.getWidth()/2, game.height-acornTexture.getHeight()-acornRestingHeight);
+		acorn.sprite.setSize(acornTexture.getWidth(), acornTexture.getHeight());
+		acorn.boundingCircle = new Circle(acorn.sprite.getX() + 12, acorn.sprite.getY() + 13, 10);
+		
+		chute = new Parachute();
+
+		chuteDeployed = true;
+		canControl = false;
+		spawnSticks = true;
+		ceaseToUpdateSpeed = true;
+		groundReleased = false;
+		endSticks = false;
+		hasChute = false;
+		startingDeployHappened = false;
+		spaceRestartsGame = false;
+		showRestart = false;
+		timeStarted = 0;
+		sticksPassed = 0;
+	
+
+		stickDistanceApart = 50; //54 //75 //50
+		stickMoveDistance = 90; //108 //100 //100 //90
+		stickSpawnDistance = 125; //150 //125 //120 //125
+		stickSpeed = 100; //100 //75 //100
+		topSpeed = 240; //200 //250 //240
+		chuteSpeed = 60; //75 //75 //60
+		
+		acceleration = 1000;
+		acornRestingHeight = 50;
+		groundRestingHeight = -5;
+		
+		cloudSpawnDistance = 200;
+
+		shakeForce = 0;
+		lastShakeDirection = 0;
+		stickHits = 0;
+
+		sticks = new Array<Stick>();
+		spawnStick();
+
+		clouds = new Array<Cloud>();
+		spawnCloud();
+		
+		ground = new Ground();
+		ground.sprite = new Sprite(groundTexture);
+		ground.sprite.setPosition((game.width-groundTexture.getWidth())/2, -groundTexture.getHeight());
+		ground.sprite.setSize(200, 92);
+		
+		topStick = new TopStick();
+		topStick.sprite = new Sprite(topStickTexture);
+		topStick.sprite.setPosition(0, game.height-topStickTexture.getHeight());
+		topStick.sprite.setSize(topStickTexture.getWidth(), topStickTexture.getHeight());
+
+		sidegroundTexture.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+
+		cameraMoved = 0;
+	}
+
+	private void screenShake() {
+		float radius = Math.abs(shakeForce)/300;
+		//System.out.println(radius);
+		float newAngle = lastShakeDirection;
+		newAngle += (180 + MathUtils.random(-60, 60));
+		Camera camera = viewport.getCamera();
+		if(shakeForce < 10) {
+			shakeForce = 0;
+			camera.position.x = game.width/2;
+			camera.position.y = game.height - viewport.getWorldHeight()/2 + cameraMoved;
+			camera.update();
+		}
+		else {
+			camera.position.x = (float) (game.width/2 + Math.sin(newAngle)*radius);
+			camera.position.y = (float) (game.height - viewport.getWorldHeight()/2 + cameraMoved + Math.cos(newAngle)*radius);
+			camera.update();
+		}
+		lastShakeDirection = (int) newAngle;
+		shakeForce *= 0.9;
+	}
+	
+	private void spawnCloud() {
+		Cloud actualCloud = new Cloud();
+		Rectangle cloud = new Rectangle();
+		cloud.setSize(cloudTexture.getWidth(), cloudTexture.getHeight());
+		float randomValue = MathUtils.random(-cloudTexture.getWidth(), viewport.getWorldWidth());
+		float cloudY = game.height - viewport.getWorldHeight() - cloudTexture.getHeight();
+		if(clouds.size > 0) {
+			cloudY = clouds.get(clouds.size-1).rectangle.y-cloudSpawnDistance;
+		}
+		cloud.setPosition(randomValue, cloudY);
+		actualCloud.rectangle = cloud;
+		actualCloud.xspeed = MathUtils.random(0, 25);
+		clouds.add(actualCloud);
+	}
+	
+	private void spawnStick() {
+		Stick stick = new Stick();
+		stick.leftSprite = new Sprite(stickTexture);
+		stick.rightSprite = new Sprite(stickTexture);
+		stick.rightSprite.setFlip(true, false);
+		float minStickX = (game.width - stickDistanceApart - stickMoveDistance)/2 - stickTexture.getWidth();
+		float maxStickX = (game.width - stickDistanceApart + stickMoveDistance)/2 - stickTexture.getWidth();
+		float randomValue = MathUtils.random(minStickX, maxStickX);
+		stick.leftSprite.setSize(stickTexture.getWidth(), stickTexture.getHeight());
+		stick.rightSprite.setSize(stickTexture.getWidth(), stickTexture.getHeight());
+		float stickY = game.height - viewport.getWorldHeight() - stickTexture.getHeight();
+		if(sticks.size > 0) {
+			stickY = sticks.get(sticks.size-1).leftSprite.getY()-stickSpawnDistance;
+		}
+		stick.leftSprite.setPosition(randomValue, stickY);
+		stick.rightSprite.setPosition(stickDistanceApart + stickTexture.getWidth() + randomValue, stickY);
+		sticks.add(stick);
+		//FIX BOUNDING BOXEN
+		//FIX UGGO ART
+	}
+
+	@Override
+	public void render(float delta) {
+		
+		
+		
+		screenShake();
+		
+		if(delta > .04) {
+		}
+		
+		//divorce render and logic!!!
+		//switch gdx.... to delta argument
+		
+		acorn.force = 0;
+		
+		Gdx.gl.glClearColor(0.4f, 0.4f, 1f, 1); //was 0.4f, 0.4f, 74f
+		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+		
+		camera.update();
+		game.batch.setProjectionMatrix(camera.combined);
+		
+		game.batch.begin();
+		
+		for(Cloud cloud : clouds) {
+			game.batch.draw(cloudTexture, cloud.rectangle.x, cloud.rectangle.y + cameraMoved);
+		}
+		
+		topStick.sprite.draw(game.batch);
+		
+		//Blinks on hit / during fall?
+		
+		for(Stick stick : sticks) {
+			stick.leftSprite.draw(game.batch);
+			stick.rightSprite.draw(game.batch);
+		}
+		
+		game.titleFont.draw(game.batch, "" + sticksPassed, game.width/2 - 6, game.height - 5 + cameraMoved);
+		
+		if (canControl && chute.visible) {
+			game.batch.draw(chute.currentFrame, acorn.sprite.getX() -52, acorn.sprite.getY());
+		}
+		acorn.sprite.draw(game.batch);
+		
+		
+		if(groundReleased) {
+			game.batch.draw(ground.sprite.getTexture(), -500, ground.sprite.getY() - viewport.getWorldHeight() + ground.sprite.getY() + ground.sprite.getHeight(), viewport.getWorldWidth(), viewport.getWorldHeight() - ground.sprite.getY());
+		}
+		
+		game.batch.draw(sidegroundTexture, -126, 0, 128, viewport.getScreenHeight()); //hardcoded nums aaa
+		game.batch.draw(sidegroundTexture, 200, 0, 128, viewport.getScreenHeight());
+		
+		if(showRestart) {
+			game.batch.draw(restartButtonTexture, viewport.getWorldWidth() - restartButtonTexture.getWidth() - 10, 20);
+		}
+		
+		
+		game.batch.end();
+		
+		/*
+		ShapeRenderer shapeRenderer = new ShapeRenderer();
+		shapeRenderer.begin(ShapeType.Line);
+		shapeRenderer.setColor(Color.RED);
+		shapeRenderer.circle(acorn.boundingCircle.x,acorn.boundingCircle.y,acorn.boundingCircle.radius);
+		//shapeRenderer.rect(acorn.sprite.getBoundingRectangle().x,acorn.sprite.getBoundingRectangle().y,acorn.sprite.getBoundingRectangle().width,acorn.sprite.getBoundingRectangle().height);
+		for (Stick stick : sticks) {
+			shapeRenderer.rect(stick.leftSprite.getX(), stick.leftSprite.getY(), stick.leftSprite.getWidth(), stick.leftSprite.getHeight());
+			shapeRenderer.rect(stick.rightSprite.getX(), stick.rightSprite.getY(), stick.rightSprite.getWidth(), stick.rightSprite.getHeight());
+		}
+		Rectangle recto = ground.sprite.getBoundingRectangle();
+		shapeRenderer.rect(recto.x, recto.y, recto.width, recto.height);
+		shapeRenderer.end();
+		*/
+		
+		chute.advanceTime(delta);
+		
+		
+		if(canControl) {
+			if (Gdx.input.justTouched() || Gdx.input.isKeyJustPressed(Keys.SPACE)) {
+				parachuteDownSound.play();
+				chute.undeploy();
+			}
+			if (Gdx.input.isTouched() || Gdx.input.isKeyPressed(Keys.SPACE)) {
+				chuteDeployed = false;
+			}
+			else {
+				if(chuteDeployed == false) {
+					chuteDeployed = true;
+					parachuteUpSound.play();
+					chute.deploy();
+				}
+			}
+		}
+		else {
+			if (Gdx.input.justTouched() || Gdx.input.isKeyJustPressed(Keys.SPACE)) {
+				if(acorn.speed == 0 && acorn.isLive) {
+					acorn.speed = -200;
+					ceaseToUpdateSpeed = false;
+					timeStarted = TimeUtils.nanoTime();
+				}
+			}
+		}
+			
+		if(chuteDeployed == true && canControl) {
+			if(cameraMoved > 0) {
+				float distance = 100*delta;
+				cameraMoved -= distance;
+				camera.translate(0,-distance);
+				/*
+				if(camera.position.y < 0) {
+					camera.position.y = 0;
+				}
+				*/
+			}
+		}
+		else if(chuteDeployed == false && canControl){
+			if(cameraMoved < 10) {
+				float distance = 100*delta;
+				cameraMoved += distance;
+				camera.translate(0,+distance);
+				/*
+				if(camera.position.y > 10) {
+					camera.position.y = 10;
+				}
+				*/
+			}
+		}
+		
+		
+		if(canControl) {
+			if(chuteDeployed) {
+				acorn.force = (acorn.speed - chuteSpeed)*-10 - acceleration;
+			}
+			else {
+				acorn.force = 0;
+			}
+		}
+		
+		if(TimeUtils.nanoTime() - timeStarted > 600000000 && acorn.isLive && timeStarted != 0) {
+			canControl = true;
+			if (startingDeployHappened == false) {
+				if(!Gdx.input.isTouched() && !Gdx.input.isKeyPressed(Keys.SPACE)) {
+					chute.deploy();
+				}
+			}
+			startingDeployHappened = true;
+		}
+		
+		
+		if(!ceaseToUpdateSpeed) {
+			acorn.speed += acceleration * delta;
+			acorn.speed += acorn.force * delta;
+			if (acorn.speed > topSpeed) {
+				acorn.speed = topSpeed;
+			}
+		}
+		
+		float increase = acorn.speed * delta;
+		if (increase < 0 || acorn.sprite.getY() > game.height - acorn.sprite.getHeight() - acornRestingHeight || (ground.sprite.getY() >= game.height - viewport.getWorldHeight() + groundRestingHeight && groundReleased)) {
+			increase = 0;
+			acorn.sprite.translateY(-acorn.speed * delta);
+			acorn.boundingCircle.setPosition(acorn.sprite.getX() + 12, acorn.sprite.getY() + 13);
+			acorn.sprite.translateX(acorn.xspeed * delta);
+			if(acorn.sprite.getY() < ground.sprite.getY()+ground.sprite.getHeight() - 4 && groundReleased) {
+				acorn.sprite.setPosition(acorn.sprite.getX(), ground.sprite.getY()+ground.sprite.getHeight() - 4);
+			}
+		}
+		acorn.sprite.rotate(acorn.rotationSpeed * delta);
+		distanceSinceStick += increase;
+		topStick.sprite.translateY(increase);
+		
+		Iterator<Cloud> cloudIter = clouds.iterator();
+		while(cloudIter.hasNext()) {
+			Cloud cloud = cloudIter.next();
+			cloud.rectangle.y += increase/2;
+			cloud.rectangle.x += cloud.xspeed*delta;
+			if(cloud.rectangle.y > game.height) {
+				cloudIter.remove();
+			}
+			if(cloud.rectangle.x < game.width-viewport.getWorldWidth()-cloud.rectangle.getWidth()) {
+				cloud.rectangle.x = viewport.getWorldWidth();
+			}
+			else if (cloud.rectangle.x > viewport.getWorldWidth()) {
+				cloud.rectangle.x = game.width-viewport.getWorldWidth()-cloud.rectangle.getWidth();
+			}
+		}
+		
+		while(!endSticks && sticks.get(sticks.size - 1).leftSprite.getY() > game.height - viewport.getWorldHeight() + stickSpawnDistance - sticks.get(sticks.size - 1).leftSprite.getHeight()) {
+			spawnStick();
+		}
+		
+		while(!endSticks && clouds.get(clouds.size - 1).rectangle.y > game.height - viewport.getWorldHeight() + cloudSpawnDistance - cloudTexture.getHeight()) {
+			spawnCloud();
+		}
+		
+		Iterator<Stick> iter = sticks.iterator();
+		while(iter.hasNext()) {
+			
+			Stick stick = iter.next();
+			stick.leftSprite.translateY(increase);
+			stick.rightSprite.translateY(increase);
+			if(groundReleased) {
+				ground.sprite.translateY(increase);
+				if(ground.sprite.getY() > groundRestingHeight) {
+					ground.sprite.setY(groundRestingHeight);
+				}
+			}
+			
+			//expoential?
+			//faster for down than up?
+			//log-ish?
+			
+			//CONVERT SO IT GOES A SET AMOUNT!!!!!!!
+			//ifs so it doesnt go over?
+			//know where to be on given time?
+			
+			if(stick.leftSprite.getY() > game.height) {
+				iter.remove();
+				if(sticks.size == 1 && endSticks) {
+					groundReleased = true;
+					ground.sprite.setPosition(0, game.height - viewport.getWorldHeight() - ground.sprite.getHeight());
+				}
+			}
+			if(stick.leftSprite.getX() > (game.width - stickDistanceApart + stickMoveDistance)/2 - stickTexture.getWidth() && !stick.goingLeft) {
+				stick.goingLeft = true;
+			}
+		
+			if(stick.leftSprite.getX() < (game.width - stickDistanceApart - stickMoveDistance)/2 - stickTexture.getWidth() && stick.goingLeft) {
+				stick.goingLeft = false;
+			}
+			if(stick.goingLeft) {
+				stick.leftSprite.translateX(-stickSpeed * delta);
+				stick.rightSprite.translateX(-stickSpeed * delta);
+				//sin function?
+			}
+			else{
+				stick.leftSprite.translateX(stickSpeed * delta);
+				stick.rightSprite.translateX(stickSpeed * delta);
+			}
+			if(Intersector.overlaps(acorn.boundingCircle,stick.leftSprite.getBoundingRectangle()) || Intersector.overlaps(acorn.boundingCircle, stick.rightSprite.getBoundingRectangle())) {
+				stick.canScore = false;
+				if(!stick.hasHit) {
+					long hitSoundInstance = hitStickSound.play();
+					hitStickSound.setPitch(hitSoundInstance, (float) (stickHits*0.2+1));
+					twigHitSound.play();
+					stickHits++;
+					stick.hasHit = true;
+					acorn.speed = -300;
+					if(acorn.xspeed == 0) {
+						if(stick.goingLeft) {
+							acorn.xspeed = -50;
+							acorn.rotationSpeed = -20;
+						}
+						else {
+							acorn.xspeed = 50;
+							acorn.rotationSpeed = 20;
+						}
+					}
+					else {
+						acorn.xspeed *= -1;
+						acorn.rotationSpeed *= -1;
+						if(acorn.rotationSpeed < 200 && acorn.rotationSpeed > -200) {
+							acorn.rotationSpeed *= 2;
+						}
+					}
+					
+					if(acorn.isLive) {
+						shakeForce=700;
+						stats.flush();
+					}
+					else {
+						shakeForce=500;
+					}
+					
+				}
+				canControl = false;
+				chuteDeployed = false;
+				acorn.isLive = false;
+				//doesnt matter since camera stays down :/
+				endSticks = true;
+				topSpeed = 50000;
+				acorn.sprite.setTexture(acornFrownTexture);
+				//move chute to acorn
+				//wiggle branch / fall leaves on hit?
+			}
+			if(Intersector.overlaps(acorn.boundingCircle, ground.sprite.getBoundingRectangle())) {
+				if(ground.hit == false) {
+					hitGroundSound.play();
+					long hitSoundInstance = hitStickSound.play();
+					hitStickSound.setPitch(hitSoundInstance, (float) (stickHits*0.2+1));
+					ground.hit = true;
+					shakeForce=acorn.speed;
+				}
+				ceaseToUpdateSpeed = true;
+				acorn.speed = 0;
+				acorn.xspeed = 0;
+				acorn.rotationSpeed = 0;
+				spaceRestartsGame = true;
+				showRestart = true;
+			}
+			
+			if(Gdx.input.isKeyJustPressed(Keys.SPACE) && spaceRestartsGame || Gdx.input.isKeyJustPressed(Keys.ENTER)) {
+				setupValues();
+			}
+			
+			if(stick.canScore && stick.leftSprite.getY() > acorn.boundingCircle.y && !endSticks) {
+				stick.canScore = false;
+				//plays an extra time sometimes WHY?
+				sticksPassed++;
+				stats.putInteger("points", (stats.getInteger("points",0)+1));
+				System.out.println(stats.getInteger("points"));
+				long passStickSoundInstance = passStickSound.play();
+				passStickSound.setPitch(passStickSoundInstance, (float) (0.8 + 0.05 * sticksPassed));
+			}
+			
+			//todo: glclearcolor for flash
+			
+			/* TODO:
+			if(impossibletosurvive) {
+				acorn.sprite.setTexture(acornFrownTexture);
+			}
+			*/
+		}
+	}
+	
+
+	@Override
+	public void resize(int width, int height) {
+		viewport.update(width, height);
+		Camera camera = viewport.getCamera();
+		camera.position.x = game.width/2;
+		camera.position.y = game.height - viewport.getWorldHeight()/2 + cameraMoved;
+		camera.update();
+	}
+
+	@Override
+	public void pause() {
+	}
+
+	@Override
+	public void resume() {
+	}
+	
+	@Override
+	public void show() {
+	}
+
+	@Override
+	public void hide() {
+	}
+
+	@Override
+	public void dispose() {
+		acornTexture.dispose();
+		stickTexture.dispose();
+		groundTexture.dispose();
+		topStickTexture.dispose();
+		parachuteUpSound.dispose();
+		parachuteDownSound.dispose();
+		hitStickSound.dispose();
+		passStickSound.dispose();
+		//many many errors
+	}
+
+}
