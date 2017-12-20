@@ -9,7 +9,7 @@ public class LoadingScreen implements Screen {
 
     private AssetManager manager;
     private Screen nextScreen;
-    private Paracorn game;
+    private final Paracorn game;
 
     public LoadingScreen(AssetManager manager, Paracorn game) {
         this.manager = manager;

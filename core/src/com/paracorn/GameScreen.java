@@ -6,6 +6,7 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.HdpiUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -17,7 +18,6 @@ public class GameScreen implements Screen {
     private Stage UIstage;
     private World world;
     private WorldListener worldListener;
-    private WorldRenderer renderer;
     private InputMultiplexer multiplexer;
     private InputHandler inputHandler;
     private OrthographicCamera camera;
@@ -38,26 +38,25 @@ public class GameScreen implements Screen {
     public GameScreen(final Paracorn game) {
         this.game = game;
         worldListener = new WorldListener();
-        world = new World(worldListener);
-        renderer = new WorldRenderer(game.assets, game.batch, world);
-        viewport = new ExtendViewport(WORLD_MIN_WIDTH, WORLD_MIN_HEIGHT, WORLD_MAX_WIDTH, WORLD_MAX_HEIGHT);
+        world = new World(worldListener, game.assets, game.batch);
+        //viewport = new ExtendViewport(WORLD_MIN_WIDTH, WORLD_MIN_HEIGHT, WORLD_MAX_WIDTH, WORLD_MAX_HEIGHT); //here or renderer? - whats the point of renderer? whats the point of world? why are the things actors?
         UIstage = new Stage(viewport, game.batch);
         multiplexer = new InputMultiplexer();
         inputHandler = new InputHandler();
         multiplexer.addProcessor(UIstage);
         multiplexer.addProcessor(inputHandler);
         Gdx.input.setInputProcessor(multiplexer);
-        camera = new OrthographicCamera();
-        viewport.setCamera(camera);
-        viewport.apply();
-        updateCamera();
+        //camera = new OrthographicCamera();
+        //viewport.setCamera(camera);
+        //viewport.apply();
+        //updateCamera();
         musicPlayer = new MusicPlayer(game.assets.backgroundMusicIntro, game.assets.backgroundMusicLoop);
-        //musicPlayer.play();
-        sidegroundDrawable = new TiledDrawable(game.assets.sidegroundRegion);
+        musicPlayer.play();
+        //sidegroundDrawable = new TiledDrawable(game.assets.sidegroundRegion);
     }
 
     private void updateCamera() {
-        camera.position.set(camera.viewportWidth/2,camera.viewportHeight/2,0);
+        //camera.position.set(camera.viewportWidth/2,camera.viewportHeight/2,0);
     }
 
     @Override
@@ -78,17 +77,13 @@ public class GameScreen implements Screen {
 
     private void draw() {
         camera.update();
-        game.batch.setProjectionMatrix(camera.combined);
-        Gdx.gl.glClearColor(1f, 0f, 1f, 1);
+        //game.batch.setProjectionMatrix(camera.combined);
+        //Gdx.gl.glClearColor(1f, 0f, 1f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        game.batch.begin();
-        renderer.draw();
-        game.batch.draw(game.assets.restartButtonRegion, 0,0,100, 600);
-        game.batch.end();
+        world.draw();
         UIstage.draw();
 
         /* TODO: DRAW IN SIDES OF VIEWPORT!
-        //use worldrenderer?
 
         float coord300 = viewport.getWorldHeight();
         //System.out.println("coord300: " + Float.toString(coord300));
@@ -133,6 +128,7 @@ public class GameScreen implements Screen {
 
     @Override
     public void show() {
+        world.resume();
     }
 
     @Override
