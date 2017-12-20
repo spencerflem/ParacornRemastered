@@ -5,13 +5,16 @@ import com.badlogic.gdx.audio.Sound;
 
 public class InputHandler implements InputProcessor {
 
-    public InputHandler() {}
+    World world;
 
-    //todo everything
-    //where should this be sent?
+    public InputHandler(World world) {
+        this.world = world;
+    }
 
     @Override
-    public boolean keyDown(int keycode) { return false; }
+    public boolean keyDown(int keycode) {
+        return false;
+    }
 
     @Override
     public boolean keyUp(int keycode) {
@@ -25,11 +28,13 @@ public class InputHandler implements InputProcessor {
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
+        world.touchDown();
         return false;
     }
 
     @Override
     public boolean touchUp(int screenX, int screenY, int pointer, int button) {
+        world.touchUp();
         return false;
     }
 

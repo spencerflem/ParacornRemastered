@@ -1,6 +1,8 @@
 package com.paracorn;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.Pool;
@@ -14,7 +16,7 @@ public class World {
         READY, RUNNING, PAUSED, GAMEOVER
     }
     private enum SubState {
-        FALLING_BEGIN, FALLING_CONTROLLABLE, FALLING_GAMEPLAY, FALLING_END, NOT_FALLING
+        FALLING_BEGIN, FALLING_CONTROLLABLE, FALLING_END, NOT_FALLING
     }
     private GameState currentState = GameState.READY;
     public SubState currentSubState = SubState.NOT_FALLING;
@@ -39,18 +41,27 @@ public class World {
     SpriteBatch batch;
     private double runningTime;
     private Random random;
+    private boolean touchDown;
 
-    public World(WorldListener listener, Assets assets, SpriteBatch batch) {
+    public World(WorldListener listener, final Assets assets, SpriteBatch batch) {
         this.listener = listener;
         this.assets = assets;
         this.batch = batch;
         branchPool = new Pool<Branch>() {
             @Override
             protected Branch newObject() {
-                return new Branch();
+                return new Branch(assets.stickRegion);
             }
         };
         reset();
+    }
+
+    public void reset() {
+        currentState = GameState.READY;
+        runningTime = 0;
+        acorn = new Acorn(assets.acornRegion);
+        branchArray = new Array<Branch>();
+        touchDown = false;
     }
 
     public void draw() {
@@ -67,14 +78,18 @@ public class World {
     }
 
     private void insertBranches() {
+        if(branchArray.size == 0) {
+            createBranch(-10);
+        }
         if(branchArray.peek().getY() > 0) {
             createBranch(branchArray.peek().getY() - BRANCH_Y_DISTANCE);
         }
     }
 
     private void createBranch(float y) {
+        System.out.println("create");
         Branch newBranch = branchPool.obtain();
-        newBranch.setPosition(20,y); //not 20 - setup other values too
+        newBranch.setPosition(-20,y); //not 20 - setup other values too
         branchArray.add(newBranch);
     }
 
@@ -82,13 +97,14 @@ public class World {
         for(Iterator<Branch> i = branchArray.iterator(); i.hasNext();) {
             Branch branch = i.next();
             branch.update(delta, acorn.getVelocity());
-            if (branch.isOffScreen(12)) { //not 12, screenheight! <- find
+            System.out.println(acorn.getVelocity());
+            if (branch.isOffScreen(200)) { //not 12, screenheight! <- find
                 branchPool.free(branch);
                 i.remove();
             }
             if (branch.neverHit && branch.collides(acorn.getBoundingCircle())) {
-                if(currentState == GameState.RUNNING && currentSubState == SubState.FALLING_GAMEPLAY) {
-                    currentSubState = SubState.FALLING_END;
+                if(currentState == GameState.RUNNING && currentSubState == SubState.FALLING_CONTROLLABLE) {
+                    //currentSubState = SubState.FALLING_END;
                 }
                 branch.hit();
                 acorn.hit();
@@ -119,12 +135,6 @@ public class World {
     }
     */
 
-    public void reset() {
-        currentState = GameState.READY;
-        runningTime = 0;
-        //put them in the correct locations
-    }
-
     public void act(float delta) {
         switch (currentState) {
             case READY:
@@ -151,27 +161,57 @@ public class World {
     private void updateReady(float delta) {
         //todo:
         //if tapped: set to running (tell UI somehow)
+        Gdx.gl.glClearColor(0f, 1f, 1f, 1);
         scrollClouds(delta);
+        if(touchDown) {
+            currentSubState = SubState.FALLING_BEGIN;
+            start();
+        }
     }
 
     private void updateRunning(float delta) {
         runningTime += delta;
-        if(runningTime >= 600000000) {
-            currentSubState = SubState.FALLING_CONTROLLABLE;
+        switch (currentSubState) {
+            case FALLING_BEGIN:
+                Gdx.gl.glClearColor(1f, 0f, 0f, 1);
+                if (runningTime >= 0.6) {
+                    currentSubState = SubState.FALLING_CONTROLLABLE;
+                }
+                acorn.touchDown = false;
+                break;
+            case FALLING_CONTROLLABLE:
+                Gdx.gl.glClearColor(0f, 1f, 0f, 1);
+                acorn.touchDown = touchDown;
+                insertBranches();
+                break;
+            case FALLING_END:
+                Gdx.gl.glClearColor(0f, 0f, 0f, 1);
+                acorn.touchDown = false;
+                break;
+            case NOT_FALLING:
+                Gdx.gl.glClearColor(1f, 1f, 1f, 1);
+                acorn.touchDown = false;
+                break;
         }
-        if(currentSubState == SubState.FALLING_GAMEPLAY) {
-            insertBranches();
-        }
+        acorn.update(delta);
         scrollClouds(delta);
         scrollBranches(delta);
     }
 
     private void updatePaused(float delta) {
-        //todo
+        Gdx.gl.glClearColor(1f, 0f, 1f, 1);
     }
 
     private void updateGameOver(float delta) {
-        //todo
+        Gdx.gl.glClearColor(1f, 1f, 0f, 1);
+    }
+
+    public void touchDown() {
+        touchDown = true;
+    }
+
+    public void touchUp() {
+        touchDown = false;
     }
 
     public boolean isReady() {

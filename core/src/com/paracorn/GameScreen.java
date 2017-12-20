@@ -39,24 +39,25 @@ public class GameScreen implements Screen {
         this.game = game;
         worldListener = new WorldListener();
         world = new World(worldListener, game.assets, game.batch);
-        //viewport = new ExtendViewport(WORLD_MIN_WIDTH, WORLD_MIN_HEIGHT, WORLD_MAX_WIDTH, WORLD_MAX_HEIGHT); //here or renderer? - whats the point of renderer? whats the point of world? why are the things actors?
+        viewport = new ExtendViewport(WORLD_MIN_WIDTH, WORLD_MIN_HEIGHT, WORLD_MAX_WIDTH, WORLD_MAX_HEIGHT);
         UIstage = new Stage(viewport, game.batch);
         multiplexer = new InputMultiplexer();
-        inputHandler = new InputHandler();
+        inputHandler = new InputHandler(world);
         multiplexer.addProcessor(UIstage);
         multiplexer.addProcessor(inputHandler);
         Gdx.input.setInputProcessor(multiplexer);
-        //camera = new OrthographicCamera();
-        //viewport.setCamera(camera);
-        //viewport.apply();
-        //updateCamera();
+        camera = new OrthographicCamera();
+        viewport.setCamera(camera);
+        viewport.apply();
+        updateCamera();
         musicPlayer = new MusicPlayer(game.assets.backgroundMusicIntro, game.assets.backgroundMusicLoop);
         musicPlayer.play();
+        Gdx.gl.glClearColor(1f, 0f, 1f, 1);
         //sidegroundDrawable = new TiledDrawable(game.assets.sidegroundRegion);
     }
 
     private void updateCamera() {
-        //camera.position.set(camera.viewportWidth/2,camera.viewportHeight/2,0);
+        camera.position.set(camera.viewportWidth/2,camera.viewportHeight/2,0);
     }
 
     @Override
@@ -77,8 +78,7 @@ public class GameScreen implements Screen {
 
     private void draw() {
         camera.update();
-        //game.batch.setProjectionMatrix(camera.combined);
-        //Gdx.gl.glClearColor(1f, 0f, 1f, 1);
+        game.batch.setProjectionMatrix(camera.combined);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         world.draw();
         UIstage.draw();
@@ -106,7 +106,6 @@ public class GameScreen implements Screen {
         //sidegroundDrawable.draw(game.batch, viewport.getRightGutterX(), 0, viewport.getRightGutterWidth(), screenHeight);
         game.batch.end();
         viewport.update(screenWidth, screenHeight, true); // Restore viewport.
-
         */
     }
 

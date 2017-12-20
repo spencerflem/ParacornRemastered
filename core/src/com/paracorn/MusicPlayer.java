@@ -23,7 +23,6 @@ public class MusicPlayer implements Music.OnCompletionListener {
         intro.setOnCompletionListener(this);
         intro.play();
         isPlayingIntro = true;
-
     }
 
     public void pause() {
