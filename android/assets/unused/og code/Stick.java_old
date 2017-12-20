@@ -1,0 +1,11 @@
+package com.spentronics.paracorn;
+
+import com.badlogic.gdx.graphics.g2d.Sprite;
+
+public class Stick {
+	Sprite leftSprite;
+	Sprite rightSprite;
+	boolean goingLeft = false;
+	boolean canScore = true;
+	boolean hasHit = false;
+}

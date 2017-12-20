@@ -1,0 +1,14 @@
+package com.spentronics.paracorn;
+
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.math.Circle;
+
+public class Acorn {
+	Sprite sprite;
+	Circle boundingCircle;
+	int speed = 0;
+	int force = 0;
+	int xspeed = 0;
+	float rotationSpeed = 0;
+	boolean isLive = true;
+}

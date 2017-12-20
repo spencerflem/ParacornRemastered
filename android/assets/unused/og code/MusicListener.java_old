@@ -1,0 +1,19 @@
+package com.spentronics.paracorn;
+
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Music.OnCompletionListener;
+
+public class MusicListener implements OnCompletionListener  {
+	
+	Music music;
+	
+	MusicListener(Music music) {
+		this.music = music;
+	}
+	
+	@Override
+	public void onCompletion(Music music) {
+		this.music.play();
+	}
+
+}

@@ -1,0 +1,8 @@
+package com.spentronics.paracorn;
+
+import com.badlogic.gdx.math.Rectangle;
+
+public class Cloud {
+	Rectangle rectangle;
+	int xspeed;
+}
